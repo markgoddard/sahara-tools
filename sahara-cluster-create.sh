@@ -27,12 +27,6 @@ esac
 PLUGIN_VERSION_HEAT=$(echo ${PLUGIN_VERSION} | sed -e 's/\./-/g')
 IMAGE_NAME=${IMAGE_NAME:-sahara-${PLUGIN}-${PLUGIN_VERSION}-${OS_DISTRO}${DIB_RELEASE:+-${DIB_RELEASE}}}
 
-# FIXME: avoid 'supporting' hadoop 2.8.0 in sahara for now.
-if [[ $PLUGIN_VERSION = '2.8.0' ]]; then
-    PLUGIN_VERSION='2.7.3'
-    PLUGIN_VERSION_HEAT='2-7-3'
-fi
-
 case $OS_DISTRO in
     centos7)
         IMAGE_USERNAME=centos
@@ -46,15 +40,15 @@ NODE_GROUP_NAME_SLAVE=${NODE_GROUP_NAME_SLAVE:-${PLUGIN}-${PLUGIN_VERSION_HEAT}-
 CLUSTER_TEMPLATE_NAME=${CLUSTER_TEMPLATE_NAME:-${PLUGIN}-${PLUGIN_VERSION_HEAT}}
 CLUSTER_NAME=${CLUSTER_NAME:-${PLUGIN}-${PLUGIN_VERSION_HEAT}-${OS_DISTRO}${DIB_RELEASE:+-${DIB_RELEASE}}}
 FLAVOR=${FLAVOR:-compute-A}
-NUM_SLAVES=${NUM_SLAVES:-2}
+NUM_SLAVES=${NUM_SLAVES:-1}
 case $PLUGIN in
     spark)
         MASTER_PROCESSES=${MASTER_PROCESSES:-"namenode datanode master slave"}
         SLAVE_PROCESSES=${SLAVE_PROCESSES:-"datanode slave"}
         ;;
     vanilla)
-        MASTER_PROCESSES=${MASTER_PROCESSES:-"namenode datanode resourcemanager nodemanager"}
-        SLAVE_PROCESSES=${SLAVE_PROCESSES:-"datanode nodemanager"}
+        MASTER_PROCESSES=${MASTER_PROCESSES:-"namenode datanode resourcemanager nodemanager master slave"}
+        SLAVE_PROCESSES=${SLAVE_PROCESSES:-"datanode nodemanager slave"}
         ;;
 esac
 KEYPAIR_NAME=${KEYPAIR_NAME:-alaska-gate}
@@ -101,9 +95,17 @@ if ! openstack dataprocessing cluster template show ${CLUSTER_TEMPLATE_NAME} >/d
         "hadoop.ib.enabled": true,
         "hadoop.roce.enabled": false,
         "hadoop.rdma.dev.name": "mlx5_0"
+    },
+    "HDFS": {
+        "dfs.master": "\${yarn.nodemanager.hostname}"
+    },
+    "Spark": {
+	"spark.ib.enabled": true,
+	"spark.shuffle.rdma.device.num": 1
     }
 }
 EOF
+
     openstack dataprocessing cluster template create \
         --name ${CLUSTER_TEMPLATE_NAME} \
         --node-groups ${NODE_GROUP_NAME_MASTER}:1 \
